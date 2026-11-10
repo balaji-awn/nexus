@@ -1,0 +1,1144 @@
+<title>Nexus Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: engineering design doc. Sticky contents rail on the left, one reading column, diagrams get the full column width. */
+:root {
+  --bg: #f5f7f8;
+  --surface: #ffffff;
+  --surface-2: #eef2f4;
+  --fg: #18212b;
+  --muted: #566372;
+  --line: #d6dde3;
+  --accent: #0b6577;
+  --accent-soft: #dcecef;
+  --amber: #8f5300;
+  --amber-soft: #f8ecd9;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --step--1: 0.8125rem;
+  --step-0: 1rem;
+  --step-1: 1.1875rem;
+  --step-2: 1.5rem;
+  --step-3: 2.125rem;
+  --step-4: 2.875rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1318;
+    --surface: #151c23;
+    --surface-2: #1b242d;
+    --fg: #e3e9ee;
+    --muted: #97a4b1;
+    --line: #2a3541;
+    --accent: #5ab8c8;
+    --accent-soft: #15323a;
+    --amber: #e2a649;
+    --amber-soft: #2f2414;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1318;
+  --surface: #151c23;
+  --surface-2: #1b242d;
+  --fg: #e3e9ee;
+  --muted: #97a4b1;
+  --line: #2a3541;
+  --accent: #5ab8c8;
+  --accent-soft: #15323a;
+  --amber: #e2a649;
+  --amber-soft: #2f2414;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+.masthead {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-block: 48px 32px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-stretch: 85%;
+  line-height: 1.15;
+  text-wrap: balance;
+  margin: 0;
+}
+h1 { font-size: var(--step-4); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: var(--step-3); font-weight: 700; }
+h3 { font-size: var(--step-2); font-weight: 650; }
+h4 { font-size: var(--step-1); font-weight: 650; }
+.lede { font-size: var(--step-1); color: var(--muted); max-width: 64ch; margin: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  background: var(--surface);
+}
+.chip.warn { color: var(--amber); border-color: var(--amber); background: var(--amber-soft); }
+
+.shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 48px;
+  padding-block: 32px 96px;
+}
+.toc {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 24px);
+  align-self: start;
+  font-size: var(--step--1);
+}
+.toc p { margin: 0 0 8px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.toc a {
+  display: block;
+  padding: 4px 10px;
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  text-decoration: none;
+}
+.toc a:hover { color: var(--fg); border-left-color: var(--accent); }
+.toc .sub a { padding-left: 22px; }
+
+main { min-width: 0; display: grid; gap: 72px; }
+section { display: grid; gap: 20px; min-width: 0; scroll-margin-top: 24px; }
+section > header { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 2px solid var(--fg); }
+.part { display: grid; gap: 14px; min-width: 0; scroll-margin-top: 24px; }
+.part + .part { margin-top: 18px; }
+p, li { max-width: 70ch; }
+p { margin: 0; }
+ul, ol { margin: 0; padding-left: 1.25rem; display: grid; gap: 6px; }
+strong { font-weight: 600; }
+code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+figure {
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 0;
+}
+figure .canvas { overflow-x: auto; padding: 20px; }
+figure .canvas pre.mermaid { margin: 0; background: transparent; font-family: var(--font-body); text-align: center; }
+figcaption {
+  border-top: 1px solid var(--line);
+  padding: 10px 16px;
+  font-size: var(--step--1);
+  color: var(--muted);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+figcaption b { font-family: var(--font-mono); font-weight: 500; color: var(--fg); }
+
+pre.code {
+  margin: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--fg);
+}
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: var(--surface-2);
+}
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 0.875rem; }
+
+.callout {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 14px 18px;
+  border-radius: 4px;
+  display: grid;
+  gap: 6px;
+}
+.callout.warn { border-left-color: var(--amber); background: var(--amber-soft); }
+.callout .label {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.callout.warn .label { color: var(--amber); }
+
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.facts div { background: var(--surface); padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+.facts dt { font-family: var(--font-mono); font-size: var(--step--1); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.facts dd { margin: 0; }
+
+.formula {
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.two > * { min-width: 0; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .toc { position: static; }
+  .toc ol { display: flex; flex-wrap: wrap; gap: 6px; }
+  .toc a { border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; background: var(--surface); }
+  .toc .sub { display: none; }
+  .two, .facts { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: var(--step-3); }
+  h2 { font-size: var(--step-2); }
+}
+</style>
+
+<div class="masthead">
+  <div class="eyebrow">Design document · v0.1 draft · 9 Nov 2026</div>
+  <h1>Nexus Architecture</h1>
+  <p class="lede">An orchestrator that reads a prompt, picks the right few agents out of thousands on the AI Platform Service, runs them, and merges their results into one cited answer.</p>
+  <div class="meta">
+    <span class="chip">Python · FastAPI · LangGraph</span>
+    <span class="chip">Postgres + pgvector · Redis</span>
+    <span class="chip">All agents read-only (v1)</span>
+    <span class="chip warn">Platform API contract is assumed</span>
+  </div>
+</div>
+
+<div class="shell">
+  <nav class="toc" aria-label="Contents">
+    <p class="eyebrow">Contents</p>
+    <ol>
+      <li><a href="#summary">Executive summary</a></li>
+      <li><a href="#theory">Concepts</a></li>
+      <li><a href="#hld">High-level design</a></li>
+      <li class="sub"><a href="#hld-components">Components</a></li>
+      <li class="sub"><a href="#hld-flow">Request pipeline</a></li>
+      <li class="sub"><a href="#hld-agents">Two kinds of agents</a></li>
+      <li><a href="#lld">Low-level design</a></li>
+      <li class="sub"><a href="#lld-modules">Modules</a></li>
+      <li class="sub"><a href="#lld-data">Data model</a></li>
+      <li class="sub"><a href="#lld-graph">Orchestration graph</a></li>
+      <li class="sub"><a href="#lld-states">Request states</a></li>
+      <li class="sub"><a href="#lld-retrieval">Retrieval</a></li>
+      <li class="sub"><a href="#lld-plan">Plans</a></li>
+      <li class="sub"><a href="#lld-client">Platform client</a></li>
+      <li class="sub"><a href="#lld-api">Nexus API</a></li>
+      <li class="sub"><a href="#lld-limits">Budgets</a></li>
+      <li><a href="#sequences">Sequence diagrams</a></li>
+      <li><a href="#dev">Building without LLM access</a></li>
+      <li><a href="#decisions">Decisions</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ============ EXECUTIVE SUMMARY ============ -->
+    <section id="summary">
+      <header>
+        <span class="eyebrow">Part 1</span>
+        <h2>Executive summary</h2>
+      </header>
+
+      <p><strong>The problem.</strong> The AI Platform Service hosts thousands of specialized agents. A user asks one question in plain language, and answering it may need two or three of those agents, sometimes in a particular order. No caller can be expected to know which agents to use, and no LLM can be shown thousands of agents at once and pick well.</p>
+
+      <p><strong>What Nexus does.</strong> Nexus takes the prompt and splits it into sub-tasks. For each sub-task it narrows thousands of agents down to the best five to ten. It then has a planning agent choose which ones to call and with what inputs, runs them in parallel where it can, checks whether the results answer the question, and finally merges everything into one answer that says which agent supplied each fact.</p>
+
+      <p><strong>How it is split.</strong> Retrieval decides what is <em>possible</em>: a registry of every agent, searched with fast embeddings and keywords, then scored by an LLM agent. The orchestrator decides what to <em>actually do</em>: planning, running, reflecting and answering, built on LangGraph for durable state.</p>
+
+      <p><strong>The main constraint.</strong> Nexus cannot call an LLM directly. Every LLM step is itself an agent on the platform, so we create six "system agents" by hand for Nexus's own reasoning. Every platform call is asynchronous: submit, get an execution ID, poll until it finishes.</p>
+
+      <dl class="facts">
+        <div><dt>Caller</dt><dd>One backend service, which sends the tenant ID on every request</dd></div>
+        <div><dt>Agents</dt><dd>All on the AI Platform Service. Catalog shared across tenants. All read-only in v1</dd></div>
+        <div><dt>LLM access</dt><dd>Only through platform agents. Six Nexus system agents, created by hand</dd></div>
+        <div><dt>Call model</dt><dd>Async: submit, then poll the execution ID with exponential backoff</dd></div>
+        <div><dt>Embeddings</dt><dd>Small model (e.g. bge-small) run inside Nexus. Produces vectors, never text</dd></div>
+        <div><dt>Not available</dt><dd>Token or cost reporting, an agent-management API, LLM access during development</dd></div>
+      </dl>
+
+      <div class="callout">
+        <span class="label">Build plan</span>
+        <p>Development starts against a fake platform that follows the assumed API. The whole pipeline, async polling, recovery after a restart, and Stage 1 retrieval quality can all be tested before any LLM is reachable. Only the quality of the system agents' reasoning has to wait for real access.</p>
+      </div>
+    </section>
+
+    <!-- ============ THEORY ============ -->
+    <section id="theory">
+      <header>
+        <span class="eyebrow">Part 2</span>
+        <h2>Concepts</h2>
+      </header>
+      <p>The ideas the design rests on, and why each one is used here.</p>
+
+      <div class="part">
+        <h3>Why not give the LLM every agent?</h3>
+        <p>The usual way to let an LLM use tools is to list them all in its prompt and let it choose. That breaks at this scale, for three reasons:</p>
+        <ul>
+          <li><strong>Size.</strong> Each agent's description and input schema runs to a few hundred tokens. Thousands of agents would not fit in any prompt.</li>
+          <li><strong>Accuracy.</strong> Models choose tools less accurately as the list grows, especially when many tools look alike: "IP reputation", "domain reputation", "IP geolocation".</li>
+          <li><strong>Latency.</strong> A larger prompt makes every planning call slower, and here every call is also a polled round trip.</li>
+        </ul>
+        <p>So Nexus treats tool selection as a <strong>search problem</strong>. It finds a short list first, and only that list goes to the planner.</p>
+      </div>
+
+      <div class="part">
+        <h3>Recall, then precision</h3>
+        <p>Retrieval has two stages because the two jobs need different tools.</p>
+        <div class="two">
+          <div class="callout">
+            <span class="label">Stage 1 · Recall</span>
+            <p>A <strong>bi-encoder</strong> embeds the sub-task and each agent separately, so agent vectors are computed once in advance. Comparing vectors takes milliseconds even across thousands of agents. It is coarse, so it keeps about 50 candidates. The goal is to not miss the right one.</p>
+          </div>
+          <div class="callout">
+            <span class="label">Stage 2 · Precision</span>
+            <p>A <strong>scorer</strong> reads the sub-task and each candidate together, so it can judge details like "this agent takes a domain, but we have an IP". This is far more accurate and far too slow for thousands of agents, which is why it only sees the 50. In Nexus the scorer is the <code>nexus-scorer</code> agent.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="part">
+        <h3>Hybrid search and rank fusion</h3>
+        <p>Embeddings capture meaning: "is this address dangerous" lands near "IP reputation lookup" even with no words in common. They are weak on exact terms such as product names, CVE IDs or log source names. Keyword search (BM25) is the opposite. Running both and merging the rankings covers both cases.</p>
+        <p>The rankings are merged with <strong>Reciprocal Rank Fusion</strong>. It uses only each agent's position in each list, so the two kinds of score never have to be put on the same scale:</p>
+        <div class="formula">RRF(agent) = Σ over lists  1 / (k + rank in that list),   k = 60</div>
+        <p>An agent ranked 1st by vectors and 4th by keywords scores 1/61 + 1/64 ≈ 0.032. An agent ranked 1st by only one list scores 1/61 ≈ 0.016. Agreement between the two lists wins.</p>
+      </div>
+
+      <div class="part">
+        <h3>Plans as graphs, in a bounded loop</h3>
+        <p>A plan is a small <strong>directed acyclic graph</strong>: steps are agent calls, and edges mean "needs output from". Steps with no edge between them run in parallel. A step that needs a list of users waits for the step that finds them, and may <strong>fan out</strong> into one call per user.</p>
+        <p>Results can raise new questions. If the IP is malicious, the natural next question is what those users did afterwards. So the orchestrator runs a loop: <strong>retrieve → plan → execute → reflect</strong>. This is the familiar "reason, act, observe" agent pattern. It is bounded by a loop count, a call count and a time limit, so a confused model cannot loop forever.</p>
+      </div>
+
+      <div class="part">
+        <h3>Async jobs, backoff and not running twice</h3>
+        <p>The platform accepts a job and returns an execution ID straight away, and the result has to be polled for. Polling too often wastes calls. Polling too rarely adds delay. <strong>Exponential backoff</strong> polls quickly at first, when fast agents finish, then spaces polls out:</p>
+        <div class="formula">wait(n) = min(0.5 s × 2ⁿ, 10 s) × random(0.8 … 1.2)</div>
+        <p>The random factor, called <strong>jitter</strong>, stops hundreds of polls that started together from all landing in the same instant.</p>
+        <p>A submit that times out is the dangerous case: the platform may have created the execution even though no reply came back. Resubmitting would run the agent twice. Nexus never resubmits blindly, and it saves each execution ID before doing anything else, so after a crash it picks up polling the same ID.</p>
+      </div>
+
+      <div class="part">
+        <h3>Durable state and graceful failure</h3>
+        <p>A request can last minutes and pause for a clarifying question, so its state cannot live only in memory. LangGraph saves a <strong>checkpoint</strong> after every step to Postgres, and any Nexus pod can resume from it.</p>
+        <p>When one agent fails, the request does not fail. Nexus answers from what succeeded and lists what is missing. A partial answer with a clear gap is more useful to the caller than an error.</p>
+      </div>
+
+      <div class="part">
+        <h3>Measuring routing</h3>
+        <ul>
+          <li><strong>Recall@50</strong>: how often the correct agent is among Stage 1's 50. If it isn't there, nothing later can recover it.</li>
+          <li><strong>Hit@5</strong>: how often it is among Stage 2's top 5, the list the planner sees.</li>
+          <li><strong>MRR</strong> (mean reciprocal rank): the average of 1 / its position. It rewards ranking the correct agent first.</li>
+        </ul>
+        <p>A test prompt must never also be used to build the index. Otherwise retrieval is tested on text it has already seen, and the scores come out higher than they will be in real use.</p>
+      </div>
+    </section>
+
+    <!-- ============ HLD ============ -->
+    <section id="hld">
+      <header>
+        <span class="eyebrow">Part 3</span>
+        <h2>High-level design</h2>
+      </header>
+
+      <div class="part" id="hld-components">
+        <h3>Components</h3>
+        <p>Nexus runs in Kubernetes next to the AI Platform Service. Its only outward dependency for reasoning and data is the platform: system agents for its own LLM steps, domain agents for the actual work, and the catalog for what exists.</p>
+        <figure>
+          <div class="canvas">
+<pre class="mermaid">
+flowchart LR
+  caller["Backend service"]
+  subgraph nexus["Nexus"]
+    api["Nexus API"]
+    orch["Orchestrator (LangGraph)"]
+    ret["Retrieval"]
+    emb["Embedding model (in-process)"]
+    client["Platform client + shared poller"]
+    sync["Catalog sync job"]
+  end
+  pg[("Postgres + pgvector")]
+  redis[("Redis")]
+  subgraph platform["AI Platform Service"]
+    sys["Nexus system agents"]
+    dom["Domain agents (thousands)"]
+    cat["Catalog API"]
+  end
+  caller -->|"prompt + X-Tenant-Id"| api
+  api --> orch
+  orch --> ret
+  ret --> emb
+  ret --> pg
+  ret --> redis
+  orch -->|"checkpoints"| pg
+  orch --> client
+  client -->|"submit + poll"| sys
+  client -->|"submit + poll"| dom
+  sync --> cat
+  sync --> emb
+  sync --> pg
+</pre>
+          </div>
+          <figcaption><b>Fig. 1</b> Components and dependencies. Postgres holds the registry, checkpoints, request history and feedback.</figcaption>
+        </figure>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Component</th><th>Responsibility</th></tr></thead>
+            <tbody>
+              <tr><td>Nexus API</td><td>Accepts prompts from the backend service, returns a request ID, serves status and results, takes answers to clarifying questions, sends callbacks.</td></tr>
+              <tr><td>Orchestrator</td><td>The LangGraph graph: intent, retrieval, planning, execution, reflection, synthesis. Owns budgets and checkpoints.</td></tr>
+              <tr><td>Retrieval</td><td>Stage 1 hybrid search over the registry, then Stage 2 scoring through <code>nexus-scorer</code>.</td></tr>
+              <tr><td>Embedding model</td><td>Turns agent descriptions, example prompts and sub-tasks into vectors. Runs in the Nexus process.</td></tr>
+              <tr><td>Platform client</td><td>The only code that talks to the platform. Submits, polls, validates against schemas, retries safely, records latency.</td></tr>
+              <tr><td>Catalog sync</td><td>Mirrors the platform catalog into the registry, re-indexes changed agents, and checks system agents against their specs.</td></tr>
+              <tr><td>Postgres + pgvector</td><td>Registry (agents, examples, vectors), LangGraph checkpoints, requests and steps, feedback.</td></tr>
+              <tr><td>Redis</td><td>Caches catalog lookups and routing decisions, and tenant-keyed agent results.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="part" id="hld-flow">
+        <h3>Request pipeline</h3>
+        <p>Every request follows the same path. Only two places branch: a clarifying question before work starts, and the reflection loop after each round.</p>
+        <figure>
+          <div class="canvas">
+<pre class="mermaid">
+flowchart TD
+  A["Prompt + tenant ID"] --> B["Intent analysis (nexus-intent)"]
+  B -->|"ambiguous"| Q["needs_input: clarifying question"]
+  Q -->|"caller answers"| B
+  B -->|"sub-tasks"| C["Stage 1 recall: vector + keyword, thousands to 50"]
+  C --> D["Stage 2 precision: nexus-scorer, 50 to top 5-10"]
+  D --> E["Plan (nexus-planner): graph of steps"]
+  E --> F["Execute: parallel where independent"]
+  F --> G{"Anything failed or flagged?"}
+  G -->|"no"| H["Synthesize (nexus-synthesizer)"]
+  G -->|"yes"| R["Reflect (nexus-reflector)"]
+  R -->|"new need, budget left"| C
+  R -->|"enough, or budget used"| H
+  H --> I["Answer + citations + what is missing"]
+</pre>
+          </div>
+          <figcaption><b>Fig. 2</b> From prompt to answer. Reflection is skipped on a clean run to save a round trip.</figcaption>
+        </figure>
+      </div>
+
+      <div class="part" id="hld-agents">
+        <h3>Two kinds of agents</h3>
+        <p>Every agent lives on the platform, but Nexus uses them in two different ways.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>System agent</th><th>Step</th><th>Gets</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>nexus-intent</code></td><td>Intent analysis</td><td>Prompt, any earlier clarification</td><td>Sub-tasks, or one clarifying question</td></tr>
+              <tr><td><code>nexus-scorer</code></td><td>Retrieval Stage 2</td><td>All sub-tasks, about 50 candidate summaries each</td><td>Score 0–10 per candidate per sub-task</td></tr>
+              <tr><td><code>nexus-planner</code></td><td>Planning</td><td>Sub-tasks, top candidates with input schemas, earlier results</td><td>Steps with agent, inputs and dependencies</td></tr>
+              <tr><td><code>nexus-reflector</code></td><td>Reflection</td><td>Prompt, plan, results so far</td><td>Done, or a list of new information needs</td></tr>
+              <tr><td><code>nexus-synthesizer</code></td><td>Synthesis</td><td>Prompt, all results with their source</td><td>Answer with citations, and gaps</td></tr>
+              <tr><td><code>nexus-example-generator</code></td><td>Offline only</td><td>One domain agent's name, description, schemas</td><td>About 10 realistic prompts for it</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>Domain agents</strong> are the thousands of specialized agents that do the actual work, such as IP reputation lookup or user connection search. Nexus finds them by retrieval and calls them from the plan. System agents are tagged in the registry and never appear in retrieval results.</p>
+        <div class="callout warn">
+          <span class="label">Hand-created</span>
+          <p>The platform has no API for creating agents, so system agents are set up by hand. The repo holds each one's prompt and schemas as the reference copy. At startup Nexus compares them with the catalog and refuses to start if one is missing or its schema differs.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LLD ============ -->
+    <section id="lld">
+      <header>
+        <span class="eyebrow">Part 4</span>
+        <h2>Low-level design</h2>
+      </header>
+
+      <div class="part" id="lld-modules">
+        <h3>Modules</h3>
+        <pre class="code">nexus/
+  api/             FastAPI routes, request/response models, callbacks
+  orchestrator/    LangGraph graph, state, nodes, budgets
+  retrieval/       stage 1 SQL, rank fusion, stage 2 scorer call
+  registry/        tables, catalog sync, embedding model wrapper
+  platform/        client, shared poller, adapter (paths, headers), errors
+  system_agents/   one folder per agent: prompt.md, input.schema.json,
+                   output.schema.json; startup check against catalog
+  eval/            example generation, recall@50 / hit@5 / MRR reports
+  fakeplatform/    fake AI Platform Service for development and CI
+  observability/   OpenTelemetry tracing, structured logs</pre>
+        <p><code>platform/adapter.py</code> is the only file that knows the platform's URL paths, header names and field names. When the real API differs from the assumed one, that file changes and nothing else.</p>
+      </div>
+
+      <div class="part" id="lld-data">
+        <h3>Data model</h3>
+        <figure>
+          <div class="canvas">
+<pre class="mermaid">
+erDiagram
+  AGENT ||--o{ AGENT_EXAMPLE : "has"
+  REQUEST ||--o{ STEP : "contains"
+  AGENT ||--o{ STEP : "invoked by"
+  REQUEST ||--o{ FEEDBACK : "receives"
+  AGENT ||--o{ FEEDBACK : "about"
+  AGENT {
+    text name PK
+    text kind "system or domain"
+    text description
+    jsonb input_schema
+    jsonb output_schema
+    text model
+    text version
+    timestamptz platform_updated_at
+    text domain
+    text_array tags
+    vector embedding "384 dims"
+    tsvector search_text
+    int p50_latency_ms
+    float failure_rate
+    bool active
+  }
+  AGENT_EXAMPLE {
+    uuid id PK
+    text agent_name FK
+    text prompt
+    text split "index or test"
+    text source "generated or real"
+    vector embedding "null for test split"
+  }
+  REQUEST {
+    uuid id PK
+    text tenant_id
+    text actor_id
+    text prompt
+    text status
+    jsonb result
+    jsonb limits
+    text lease_owner
+    timestamptz lease_until
+    timestamptz created_at
+    timestamptz finished_at
+  }
+  STEP {
+    uuid id PK
+    uuid request_id FK
+    int loop_no
+    text agent_name FK
+    text execution_id
+    jsonb input
+    jsonb output
+    text status
+    text error
+    int latency_ms
+  }
+  FEEDBACK {
+    uuid id PK
+    uuid request_id FK
+    text agent_name FK
+    text signal "used, cited, unhelpful"
+    timestamptz created_at
+  }
+</pre>
+          </div>
+          <figcaption><b>Fig. 3</b> Nexus-owned tables. LangGraph's Postgres checkpointer adds its own tables alongside these.</figcaption>
+        </figure>
+        <ul>
+          <li><strong>Several vectors per agent.</strong> Each agent has one vector for its description, plus one per indexed example prompt. Its vector score is the best match among them. A user's wording is often closer to an example prompt than to the description.</li>
+          <li><strong>Leases.</strong> <code>lease_owner</code> and <code>lease_until</code> on <code>REQUEST</code> let a running pod claim a request. If the pod dies, the lease expires and another pod resumes from the checkpoint.</li>
+          <li><strong>Steps keep execution IDs.</strong> Every agent call is a row with its platform execution ID. That gives an audit trail and makes resuming safe.</li>
+        </ul>
+      </div>
+
+      <div class="part" id="lld-graph">
+        <h3>Orchestration graph</h3>
+        <p>The LangGraph graph, node by node. State is one typed object that holds the prompt, tenant, sub-tasks, candidates, plan, step results, loop counter and budget counters. It is checkpointed after every node.</p>
+        <figure>
+          <div class="canvas">
+<pre class="mermaid">
+flowchart LR
+  S(("start")) --> intent
+  intent -->|"clarify"| ask["ask_user (interrupt)"]
+  ask -->|"answer posted"| intent
+  intent -->|"sub-tasks"| recall
+  recall --> score
+  score --> plan
+  plan --> check["validate_plan"]
+  check -->|"invalid, retry once"| plan
+  check -->|"valid"| execute
+  execute --> gate{"clean run?"}
+  gate -->|"yes"| synthesize
+  gate -->|"no"| reflect
+  reflect -->|"new needs + budget"| recall
+  reflect -->|"done"| synthesize
+  synthesize --> E(("end"))
+</pre>
+          </div>
+          <figcaption><b>Fig. 4</b> Graph nodes. <code>ask_user</code> uses LangGraph's <code>interrupt()</code>, and the API resumes it with <code>Command(resume=answer)</code>.</figcaption>
+        </figure>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Node</th><th>Does</th><th>Platform calls</th></tr></thead>
+            <tbody>
+              <tr><td><code>intent</code></td><td>Splits the prompt into sub-tasks, or asks a question</td><td>1 system</td></tr>
+              <tr><td><code>recall</code></td><td>Stage 1 for each new sub-task (SQL + embedding, no LLM)</td><td>0</td></tr>
+              <tr><td><code>score</code></td><td>Stage 2 for all sub-tasks in one call</td><td>1 system</td></tr>
+              <tr><td><code>plan</code></td><td>Builds the step graph</td><td>1 system</td></tr>
+              <tr><td><code>validate_plan</code></td><td>Checks agents, acyclic graph, inputs against schemas, budget</td><td>0</td></tr>
+              <tr><td><code>execute</code></td><td>Runs steps in dependency order, independent ones in parallel</td><td>1 per step</td></tr>
+              <tr><td><code>reflect</code></td><td>Decides whether more is needed</td><td>1 system</td></tr>
+              <tr><td><code>synthesize</code></td><td>Writes the answer with citations</td><td>1 system</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>A clean single-round request makes <strong>4 system calls</strong> (intent, score, plan, synthesize) plus one call per domain step.</p>
+      </div>
+
+      <div class="part" id="lld-states">
+        <h3>Request states</h3>
+        <div class="two">
+          <figure>
+            <div class="canvas">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> queued
+  queued --> running
+  running --> needs_input: clarifying question
+  needs_input --> running: answer posted
+  running --> succeeded
+  running --> partial: some steps failed
+  running --> failed
+  queued --> cancelled
+  running --> cancelled
+  needs_input --> cancelled: cancel or timeout
+  succeeded --> [*]
+  partial --> [*]
+  failed --> [*]
+  cancelled --> [*]
+</pre>
+            </div>
+            <figcaption><b>Fig. 5</b> Nexus request (what the caller sees)</figcaption>
+          </figure>
+          <figure>
+            <div class="canvas">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> queued
+  queued --> running
+  running --> succeeded
+  running --> failed
+  queued --> cancelled
+  running --> cancelled
+  running --> timed_out: Nexus deadline
+  succeeded --> [*]
+  failed --> [*]
+  cancelled --> [*]
+  timed_out --> [*]
+</pre>
+            </div>
+            <figcaption><b>Fig. 6</b> One agent execution. <code>timed_out</code> exists only on the Nexus side.</figcaption>
+          </figure>
+        </div>
+        <p><code>failed</code> means nothing useful could be returned, for example intent analysis itself failed. If even one domain step succeeded, the request ends as <code>partial</code>, with an answer and a list of what is missing.</p>
+      </div>
+
+      <div class="part" id="lld-retrieval">
+        <h3>Retrieval</h3>
+        <h4>Stage 1: one SQL round trip per sub-task</h4>
+        <ol>
+          <li>Embed the sub-task with the query prefix the embedding model expects. The vector is normalized, so cosine similarity is a dot product.</li>
+          <li>Vector list: top 100 agents by the best match across their description and example vectors (pgvector HNSW index).</li>
+          <li>Keyword list: top 100 by Postgres full-text rank on <code>search_text</code>. If true BM25 is needed later, a BM25 extension can replace this.</li>
+          <li>Both lists are filtered inside the query: <code>kind = 'domain' AND active</code>, plus a domain filter when intent supplies one.</li>
+          <li>Fuse with RRF (k = 60) and keep the top 50.</li>
+        </ol>
+        <h4>Stage 2: one scorer call for the whole request</h4>
+        <p>Nexus sends every sub-task with its 50 candidates to <code>nexus-scorer</code>. Each candidate goes as a short summary: name, description cut to about 300 characters, and input field names. The scorer returns a score from 0 to 10 for each. Nexus keeps candidates scoring 6 or more, at least 3 and at most 10 per sub-task.</p>
+        <div class="callout">
+          <span class="label">If the scorer fails</span>
+          <p>Nexus falls back to the top 5 by RRF order and carries on. Retrieval quality drops, but the request still gets answered.</p>
+        </div>
+      </div>
+
+      <div class="part" id="lld-plan">
+        <h3>Plans</h3>
+        <p>The planner returns steps. A step's input can be a literal value or a reference to an earlier step's output. A reference with <code>fan_out</code> turns into one call per item.</p>
+<pre class="code">{
+  "steps": [
+    { "id": "s1", "subtask": "a", "agent": "ip-reputation-lookup",
+      "input": { "ip": "1.2.3.4" }, "depends_on": [] },
+    { "id": "s2", "subtask": "b", "agent": "user-connection-search",
+      "input": { "destination_ip": "1.2.3.4", "window": "30d" }, "depends_on": [] },
+    { "id": "s3", "subtask": "b", "agent": "user-device-lookup",
+      "input": { "user_id": { "from": "s2", "path": "$.users[*].id", "fan_out": true } },
+      "depends_on": ["s2"] }
+  ],
+  "expects_follow_up": false
+}</pre>
+        <p><code>validate_plan</code> rejects a plan when:</p>
+        <ul>
+          <li>a step names an agent that wasn't among the candidates</li>
+          <li>the steps form a cycle</li>
+          <li>an input that is already known fails the agent's schema</li>
+          <li>the plan, counting fan-out, would go over the call budget</li>
+        </ul>
+        <p>Nexus gives the planner one retry, passing the errors back. Inputs that come from earlier steps are checked again when they are filled in, just before each call.</p>
+      </div>
+
+      <div class="part" id="lld-client">
+        <h3>Platform client</h3>
+        <p>One shared poller per process keeps every open execution in a min-heap, ordered by when it is next due. A single async task takes the due entries, polls them with a limit on concurrent requests, and resolves the waiting call. Ten thousand open executions cost one task, not ten thousand.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th class="num">Poll</th><th class="num">Wait before (s)</th><th class="num">Time since submit (s)</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td class="num">0.5</td><td class="num">0.5</td></tr>
+              <tr><td class="num">2</td><td class="num">1</td><td class="num">1.5</td></tr>
+              <tr><td class="num">3</td><td class="num">2</td><td class="num">3.5</td></tr>
+              <tr><td class="num">4</td><td class="num">4</td><td class="num">7.5</td></tr>
+              <tr><td class="num">5</td><td class="num">8</td><td class="num">15.5</td></tr>
+              <tr><td class="num">6</td><td class="num">10</td><td class="num">25.5</td></tr>
+              <tr><td class="num">7 – 15</td><td class="num">10 each</td><td class="num">35.5 … 115.5</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Without jitter, an agent that hits the default 120 s timeout is polled 15 times. Most agents should finish within the first four polls, under 8 seconds.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Platform response</th><th>Client behaviour</th></tr></thead>
+            <tbody>
+              <tr><td><code>202</code> on submit</td><td>Save the execution ID to state first, then register it with the poller</td></tr>
+              <tr><td>Submit times out</td><td>Do not resubmit. Fail the step as "unknown outcome"</td></tr>
+              <tr><td><code>400</code> / <code>422</code></td><td>Bad input. No retry. Step fails</td></tr>
+              <tr><td><code>401</code> / <code>403</code></td><td>Configuration error. Fail the request and alert</td></tr>
+              <tr><td><code>404</code></td><td>Unknown agent. Trigger a catalog resync. Step fails</td></tr>
+              <tr><td><code>429</code></td><td>Wait for <code>Retry-After</code>, then retry</td></tr>
+              <tr><td><code>5xx</code> on poll</td><td>Keep polling on the normal schedule</td></tr>
+              <tr><td>Output fails its schema</td><td>Step fails with the validation error kept for debugging</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="part" id="lld-api">
+        <h3>Nexus API</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Call</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code>POST /v1/requests</code></td><td>Submit. Header <code>X-Tenant-Id</code>. Body: <code>prompt</code>, optional <code>actor_id</code>, <code>callback_url</code>, <code>limits</code>. Returns <code>202</code> with <code>request_id</code>.</td></tr>
+              <tr><td><code>GET /v1/requests/{id}</code></td><td>Status, the pending question if any, and the result when finished.</td></tr>
+              <tr><td><code>POST /v1/requests/{id}/input</code></td><td>Answer a clarifying question.</td></tr>
+              <tr><td><code>DELETE /v1/requests/{id}</code></td><td>Cancel. Open executions are cancelled on the platform if it supports it.</td></tr>
+            </tbody>
+          </table>
+        </div>
+<pre class="code">{
+  "request_id": "req_7f3c…",
+  "status": "partial",
+  "answer": "1.2.3.4 is rated malicious by 2 of 3 feeds. Three users connected to it in the last 30 days: …",
+  "citations": [
+    { "agent": "ip-reputation-lookup",   "execution_id": "exe_01HZX…", "claim": "rated malicious" },
+    { "agent": "user-connection-search", "execution_id": "exe_01HZY…", "claim": "three users connected" }
+  ],
+  "missing": [
+    { "agent": "user-device-lookup", "reason": "timed out after 120 s for user u_381" }
+  ]
+}</pre>
+      </div>
+
+      <div class="part" id="lld-limits">
+        <h3>Budgets and defaults</h3>
+        <p>The platform reports no token usage or cost, so budgets count what Nexus can see. The caller can lower them per request.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Limit</th><th class="num">Default</th><th>When hit</th></tr></thead>
+            <tbody>
+              <tr><td>Reflection loops</td><td class="num">3</td><td>Go to synthesis with what exists</td></tr>
+              <tr><td>Agent calls (system + domain)</td><td class="num">40</td><td>Stop planning new steps, then synthesize</td></tr>
+              <tr><td>Wall-clock time per request</td><td class="num">180 s</td><td>Cancel open steps, then synthesize</td></tr>
+              <tr><td>Timeout per agent call</td><td class="num">120 s</td><td>Step marked <code>timed_out</code></td></tr>
+              <tr><td>Parallel steps per request</td><td class="num">8</td><td>Extra steps wait their turn</td></tr>
+              <tr><td>Clarifying-question wait</td><td class="num">24 h</td><td>Request cancelled</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Synthesis is always allowed to run, even after a budget is hit, so the caller always gets an answer from whatever was found.</p>
+      </div>
+    </section>
+
+    <!-- ============ SEQUENCES ============ -->
+    <section id="sequences">
+      <header>
+        <span class="eyebrow">Part 5</span>
+        <h2>Sequence diagrams</h2>
+      </header>
+      <p>All examples use the same prompt: <em>"Is IP 1.2.3.4 malicious, and did any of our users connect to it?"</em> Every arrow to the platform is a submit followed by polling. That detail appears only in diagram 2.</p>
+
+      <div class="part">
+        <h3>1. A request from start to finish</h3>
+        <figure>
+          <div class="canvas">
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant B as Backend service
+  participant N as Nexus API
+  participant O as Orchestrator
+  participant R as Retrieval
+  participant P as AI Platform Service
+  B->>N: POST /v1/requests (X-Tenant-Id, prompt)
+  N-->>B: 202 request_id, queued
+  N->>O: start graph
+  O->>P: nexus-intent
+  P-->>O: sub-tasks: (a) IP reputation, (b) users who connected
+  O->>R: Stage 1 recall for a and b
+  R-->>O: 50 candidates each
+  O->>P: nexus-scorer (both sub-tasks, one call)
+  P-->>O: scores
+  O->>P: nexus-planner
+  P-->>O: plan: s1 and s2, no dependency
+  par s1
+    O->>P: ip-reputation-lookup
+    P-->>O: malicious
+  and s2
+    O->>P: user-connection-search
+    P-->>O: no users found
+  end
+  Note over O: clean run, reflection skipped
+  O->>P: nexus-synthesizer
+  P-->>O: answer + citations
+  O->>N: status succeeded
+  N->>B: POST callback_url (if given)
+  B->>N: GET /v1/requests/request_id
+  N-->>B: answer, citations
+</pre>
+          </div>
+          <figcaption><b>Fig. 7</b> Happy path. Four system calls and two domain calls.</figcaption>
+        </figure>
+      </div>
+
+      <div class="part">
+        <h3>2. One agent call: submit and poll</h3>
+        <figure>
+          <div class="canvas">
+<pre class="mermaid">
+sequenceDiagram
+  participant G as Graph node
+  participant C as Platform client
+  participant S as Checkpoint store
+  participant Q as Shared poller
+  participant P as AI Platform Service
+  G->>C: invoke(agent, input, tenant)
+  C->>C: validate input against schema
+  C->>P: POST /agents/agent/executions (X-Tenant-Id)
+  P-->>C: 202 execution_id
+  C->>S: save execution_id in step state
+  C->>Q: register(execution_id, deadline)
+  loop until finished or deadline
+    Q->>P: GET /executions/execution_id
+    P-->>Q: queued or running
+    Note over Q: next wait = min(0.5 x 2^n, 10) s, plus or minus 20 percent
+  end
+  alt succeeded
+    P-->>Q: succeeded + output
+    Q-->>C: output
+    C->>C: validate output against schema
+    C-->>G: result
+  else failed
+    P-->>Q: failed + error
+    Q-->>C: error
+    C-->>G: step failed (error kept)
+  else deadline reached
+    Q->>P: DELETE /executions/execution_id (if supported)
+    Q-->>C: timed out
+    C-->>G: step timed_out
+  end
+</pre>
+          </div>
+          <figcaption><b>Fig. 8</b> The execution ID is saved before polling starts. This is what makes recovery after a crash safe.</figcaption>
+        </figure>
+      </div>
+
+      <div class="part">
+        <h3>3. Reflection loop</h3>
+        <figure>
+          <div class="canvas">
+<pre class="mermaid">
+sequenceDiagram
+  participant O as Orchestrator
+  participant R as Retrieval
+  participant P as AI Platform Service
+  Note over O: Round 1 done: IP malicious, 3 users connected
+  O->>P: nexus-reflector (prompt, plan, results)
+  P-->>O: not done: need recent activity for the 3 users
+  O->>O: loops 1 of 3, calls 7 of 40: continue
+  O->>R: Stage 1 recall for the new need
+  R-->>O: 50 candidates
+  O->>P: nexus-scorer
+  P-->>O: scores
+  O->>P: nexus-planner (with round 1 results)
+  P-->>O: user-activity-timeline, fan out over 3 users
+  par user u_102
+    O->>P: user-activity-timeline
+    P-->>O: activity
+  and user u_215
+    O->>P: user-activity-timeline
+    P-->>O: activity
+  and user u_381
+    O->>P: user-activity-timeline
+    P-->>O: timed out
+  end
+  O->>P: nexus-reflector
+  P-->>O: done
+  O->>P: nexus-synthesizer
+  P-->>O: answer, gap: u_381 activity missing
+  Note over O: request ends as partial
+</pre>
+          </div>
+          <figcaption><b>Fig. 9</b> A second round, triggered by what the first one found. One fan-out step times out, so the answer is partial.</figcaption>
+        </figure>
+      </div>
+
+      <div class="part">
+        <h3>4. Clarifying question</h3>
+        <figure>
+          <div class="canvas">
+<pre class="mermaid">
+sequenceDiagram
+  participant B as Backend service
+  participant N as Nexus API
+  participant O as Orchestrator
+  participant S as Checkpoint store
+  participant P as AI Platform Service
+  B->>N: POST /v1/requests "is that IP bad?"
+  N-->>B: 202 request_id
+  O->>P: nexus-intent
+  P-->>O: clarify: which IP address?
+  O->>S: checkpoint, pause at ask_user
+  N->>B: callback: needs_input + question
+  B->>N: POST /v1/requests/request_id/input "1.2.3.4"
+  N->>O: resume with answer
+  O->>S: load checkpoint
+  O->>P: nexus-intent (prompt + answer)
+  P-->>O: sub-tasks
+  Note over O: continues as in diagram 1
+</pre>
+          </div>
+          <figcaption><b>Fig. 10</b> The graph pauses with no pod holding it in memory. Any pod can resume it.</figcaption>
+        </figure>
+      </div>
+
+      <div class="part">
+        <h3>5. Recovery after a pod crash</h3>
+        <figure>
+          <div class="canvas">
+<pre class="mermaid">
+sequenceDiagram
+  participant A as Nexus pod A
+  participant S as Postgres
+  participant Bp as Nexus pod B
+  participant P as AI Platform Service
+  A->>S: claim request (lease 30 s)
+  A->>P: submit user-connection-search
+  P-->>A: execution_id exe_42
+  A->>S: save exe_42 in step state
+  Note over A: pod A crashes, lease is not renewed
+  Bp->>S: find requests with expired leases
+  S-->>Bp: request + checkpoint with exe_42
+  Bp->>S: claim request (lease 30 s)
+  Bp->>P: GET /executions/exe_42
+  P-->>Bp: succeeded + output
+  Note over Bp: no resubmit, so the agent ran exactly once
+</pre>
+          </div>
+          <figcaption><b>Fig. 11</b> Leases decide which pod owns a request. Saved execution IDs prevent running an agent twice.</figcaption>
+        </figure>
+      </div>
+
+      <div class="part">
+        <h3>6. Catalog sync</h3>
+        <figure>
+          <div class="canvas">
+<pre class="mermaid">
+sequenceDiagram
+  participant J as Sync job
+  participant P as AI Platform Service
+  participant E as Embedding model
+  participant D as Postgres
+  J->>P: GET /agents (all pages)
+  P-->>J: agents with version, updated_at
+  J->>D: compare with registry
+  loop each new or changed domain agent
+    J->>P: nexus-example-generator
+    P-->>J: about 10 prompts
+    J->>D: store 5 as index, 5 as test
+    J->>E: embed description + index prompts
+    E-->>J: vectors
+    J->>D: upsert agent, examples, vectors
+  end
+  J->>D: mark agents missing from catalog inactive
+  J->>D: check system agents against repo specs
+</pre>
+          </div>
+          <figcaption><b>Fig. 12</b> Runs on a schedule, and on demand when a call returns 404 for an unknown agent.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ============ DEV WITHOUT LLM ============ -->
+    <section id="dev">
+      <header>
+        <span class="eyebrow">Part 6</span>
+        <h2>Building without LLM access</h2>
+      </header>
+      <p>Nexus is developed against a fake AI Platform Service that follows the assumed API. Nexus cannot tell the two apart. Switching to the real platform is one setting, the base URL.</p>
+      <figure>
+        <div class="canvas">
+<pre class="mermaid">
+flowchart LR
+  N["Nexus"] -->|"AI_PLATFORM_BASE_URL"| F["Fake platform (now)"]
+  N -.->|"same URL setting"| R["Real AI Platform Service (later)"]
+  F --> C1["~2,000 generated agents"]
+  F --> C2["Scenario agents with fixed outputs"]
+  F --> C3["System agents: scripted or heuristic"]
+  F --> C4["Fault injection: latency, 429, errors, bad output"]
+</pre>
+        </div>
+        <figcaption><b>Fig. 13</b> The fake platform stands in until access arrives.</figcaption>
+      </figure>
+      <div class="two">
+        <div class="callout">
+          <span class="label">Testable now</span>
+          <ul>
+            <li>Every path in the graph: one round, a reflection loop, partial failure, clarifying questions, budgets</li>
+            <li>Async polling, timeouts, and resuming after a restart</li>
+            <li>Stage 1 recall@50, since it needs only the embedding model</li>
+            <li>That every system-agent output matches its spec</li>
+          </ul>
+        </div>
+        <div class="callout warn">
+          <span class="label">Waits for LLM access</span>
+          <ul>
+            <li>How well intent, scorer, planner and synthesizer actually perform</li>
+            <li>Real latency per call and polling tuning</li>
+            <li>A prompt-tuning pass on the system agents</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DECISIONS ============ -->
+    <section id="decisions">
+      <header>
+        <span class="eyebrow">Part 7</span>
+        <h2>Decisions</h2>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Topic</th><th>Decision</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>LLM access</td><td>Only through agents on the AI Platform Service</td><td>Given</td></tr>
+            <tr><td>Platform calls</td><td>Async submit, then poll with exponential backoff</td><td>Given</td></tr>
+            <tr><td>Platform API shape</td><td>Paths, headers and fields as in the assumed contract, kept in one adapter</td><td><span class="chip warn">Assumed</span></td></tr>
+            <tr><td>Catalog</td><td>Same for all tenants</td><td>Given</td></tr>
+            <tr><td>Embeddings</td><td>Small model run inside Nexus</td><td>Decided</td></tr>
+            <tr><td>Stage 2 scoring</td><td><code>nexus-scorer</code> system agent, one call per request</td><td>Decided</td></tr>
+            <tr><td>Identity</td><td>Tenant ID + optional actor ID, no per-user permissions in v1</td><td>Decided</td></tr>
+            <tr><td>Agent actions</td><td>All read-only in v1, no approval flow</td><td>Given</td></tr>
+            <tr><td>System agents</td><td>Created by hand; specs in repo, checked at startup</td><td>Decided</td></tr>
+            <tr><td>Cost tracking</td><td>Not available; budgets count loops, calls, time</td><td>Given</td></tr>
+            <tr><td>Caller</td><td>One backend service, async API with optional callback</td><td>Given</td></tr>
+            <tr><td>Test data</td><td>Generated from the catalog, replaced by real traffic over time</td><td>Decided</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* Mermaid renders natively inside the artifact viewer. When this file is opened
+   directly from disk, nothing renders it, so load Mermaid as a fallback. */
+(function () {
+  function unrendered() {
+    return Array.prototype.some.call(document.querySelectorAll("pre.mermaid"), function (el) {
+      return !el.querySelector("svg") && !el.hasAttribute("data-processed");
+    });
+  }
+  setTimeout(function () {
+    if (window.mermaid || !unrendered()) return;
+    var s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js";
+    s.onload = function () {
+      var root = document.documentElement;
+      var t = root.getAttribute("data-theme");
+      var dark = t === "dark" || (!t && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+      window.mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+      window.mermaid.run({ querySelector: "pre.mermaid" });
+    };
+    document.head.appendChild(s);
+  }, 2500);
+})();
+</script>
